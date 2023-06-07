@@ -1,7 +1,7 @@
 # SPARQL Shape Fragments
 Note: this repository serves as an up-to-date version of the project found in the [Shape Fragments repository](https://github.com/Shape-Fragments/SHACL2SPARQL). This package uses an updated version of the [SHACL Logical Syntax Parser](https://github.com/MaximeJakubowski/sls_project).
 
-The main goal of this project is to translate SHACL shapes to corresponding SPARQL queries according to the shape fragments specification.
+The main goal of this project is to translate SHACL shapes to corresponding SPARQL queries according to the shape fragments specification in [our paper](https://openproceedings.org/2023/conf/edbt/paper-3.pdf).
 
 ## Current status
 At the moment, this project is broken. It does not run, and is being worked on. An older, working version can be found [here](https://github.com/Shape-Fragments/SHACL2SPARQL).
