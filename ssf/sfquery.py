@@ -1,16 +1,20 @@
+from typing import List
+
 from slsparser.shapels import SANode, Op
 from slsparser.utilities import negation_normal_form
 from slsparser.pathls import PANode, POp
-import unaryquery
+from ssf import unaryquery
 
-
-def _make_simple_comp(complist):
+def _make_simple_comp(complist: List[PANode]) -> PANode:
     if len(complist) == 1:
         return complist[0]
     return PANode(POp.COMP, [complist[0], _make_simple_comp(complist[1:])])
 
 
-def graph_paths(node):
+def graph_paths(node: PANode) -> str:
+    if node.pop == POp.ID:
+        return 'SELECT ?t ?s ?p ?o ?h WHERE {}' #empty
+
     if node.pop == POp.PROP:
         prop = str(node.children[0])
         return f'''
@@ -34,66 +38,60 @@ def graph_paths(node):
         qes = ''
         for child in node.children:
             qes += f'{{ {graph_paths(child)} }} UNION '
-        return f'''
-        # graph_paths POp.ALT
-        SELECT ?t ?s ?p ?o ?h WHERE {{ {qes[:-6]} }}'''
+        return f'''SELECT ?t ?s ?p ?o ?h WHERE {{ {qes[:-6]} }}'''
 
     if node.pop == POp.COMP:
         node = _make_simple_comp(node.children)
         qe1 = graph_paths(node.children[0])
         qe2 = graph_paths(node.children[1])
         return f'''
-# graph_paths POp.COMP
-SELECT ?t ?s ?p ?o ?h
-WHERE {{
-{{
-  {{
-    SELECT ?t ?s ?p ?o (?h AS ?h1)
-    WHERE {{ {qe1} }}
-  }} .
-  {{
-    SELECT (?t AS ?h1) (?s AS ?s1) (?p AS ?p1) (?o AS ?o1) ?h
-    WHERE {{ {qe2} }}
-  }}
-}} UNION {{
-  {{
-    SELECT ?t (?s AS ?s2) (?p AS ?p2) (?o AS ?o2) (?h AS ?h1)
-    WHERE {{ {qe1} }}
-  }} .
-  {{
-    SELECT (?t AS ?h1) ?s ?p ?o ?h
-    WHERE {{ {qe2} }}
-  }}
-}} }}
-'''
+        SELECT ?t ?s ?p ?o ?h
+        WHERE {{
+        {{
+          {{
+            SELECT ?t ?s ?p ?o (?h AS ?h1)
+            WHERE {{ {qe1} }}
+          }} .
+          {{
+            SELECT (?t AS ?h1) (?s AS ?s1) (?p AS ?p1) (?o AS ?o1) ?h
+            WHERE {{ {qe2} }}
+          }}
+        }} UNION {{
+          {{
+            SELECT ?t (?s AS ?s2) (?p AS ?p2) (?o AS ?o2) (?h AS ?h1)
+            WHERE {{ {qe1} }}
+          }} .
+          {{
+            SELECT (?t AS ?h1) ?s ?p ?o ?h
+            WHERE {{ {qe2} }}
+          }}
+        }} }}'''
+    
     if node.pop == POp.INV:
         qe1 = graph_paths(node.children[0])
-        return f'''
-        SELECT (?h AS ?t) ?s ?p ?o (?t AS ?h)
-        WHERE {{ {qe1} }}
-'''
+        return f'''SELECT (?h AS ?t) ?s ?p ?o (?t AS ?h) WHERE {{ {qe1} }}'''
 
     if node.pop == POp.KLEENE:
         qe1 = graph_paths(node.children[0])
         path = unaryquery.to_path(node)
         return f'''
-# graph_paths POp.KLEENE
-SELECT ?t ?s ?p ?o ?h
-WHERE {{
-  ?t {path} ?x1 .
-  ?x2 {path} ?h .
-  {{
-    SELECT (?t AS ?x1) ?s ?p ?o (?h AS ?x2)
-    WHERE {{ {qe1} }}
-  }} UNION {{
-    SELECT (?h AS ?t) ?h
-    WHERE {{ {{ ?h ?_p1 ?_o1 }} UNION {{ ?_s2 ?_p2 ?h }} }}
-  }}
-}}
-'''
+        SELECT ?t ?s ?p ?o ?h
+        WHERE {{
+          ?t {path} ?x1 .
+          ?x2 {path} ?h .
+          {{
+            SELECT (?t AS ?x1) ?s ?p ?o (?h AS ?x2)
+            WHERE {{ {qe1} }}
+          }} UNION {{
+            SELECT (?h AS ?t) ?h
+            WHERE {{ {{ ?h ?_p1 ?_o1 }} UNION {{ ?_s2 ?_p2 ?h }} }}
+          }}
+        }}'''
+    
+    return ''
 
 
-def to_sfquery(node, ignore_tests=False):
+def to_sfquery(node: SANode) -> str:
     # Optimization: OR does not need conformance
     if node.op == Op.OR:
         qps = ''
@@ -101,7 +99,7 @@ def to_sfquery(node, ignore_tests=False):
             qps += f'{{ {to_sfquery(child)} }} UNION '
         return f'SELECT ?v ?s ?p ?o WHERE {{ {qps[:-6]} }}'
 
-    cqp = unaryquery.to_uq(node, ignore_tests=ignore_tests)
+    cqp = unaryquery.to_uq(node)
 
     if node.op == Op.AND:
         qps = ''
@@ -119,8 +117,8 @@ def to_sfquery(node, ignore_tests=False):
             }}
         }}'''
 
-    if node.op == Op.GEQ:
-        cqp1 = unaryquery.to_uq(node.children[2], ignore_tests=ignore_tests)
+    if node.op == Op.COUNTRANGE:
+        cqp1 = unaryquery.to_uq(node.children[2])
         path = unaryquery.to_path(node.children[1])
         qp1 = to_sfquery(node.children[2])
         # TODO Optimization (??): If node is of the form geq_n E.TEST we should incorporate the test
@@ -153,7 +151,7 @@ def to_sfquery(node, ignore_tests=False):
     if node.op == Op.LEQ and node.children[2].op != Op.TOP:
         qe = graph_paths(node.children[1])
         np1 = negation_normal_form(SANode(Op.NOT, [node.children[2]]))
-        cqnp1 = unaryquery.to_uq(np1, ignore_tests=ignore_tests)
+        cqnp1 = unaryquery.to_uq(np1)
         qnp1 = to_sfquery(np1)
         path = unaryquery.to_path(node.children[1])
 
@@ -202,7 +200,7 @@ def to_sfquery(node, ignore_tests=False):
         }} }} }}
         '''
 
-    if node.op == Op.EQ:
+    if node.op == Op.EQ: # TODO: add EQ ID
         qe = graph_paths(node.children[0])
         qp = graph_paths(node.children[1])
 

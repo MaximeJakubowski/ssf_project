@@ -1,0 +1,15 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix : <http://example.org/> .
+
+# Nodes of type manager must have equal values for firstname and givenname properties
+
+:testshape a sh:NodeShape ;
+    sh:class :manager ;
+    sh:property [
+        a sh:PropertyShape ;
+        sh:path :firstName ;
+        sh:equals :givenName;
+    ] .
+# :manager1 :manager2
+
+:testshape sh:targetClass :manager .

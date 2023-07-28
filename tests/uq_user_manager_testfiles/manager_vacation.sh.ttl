@@ -1,0 +1,21 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix : <http://example.org/> .
+
+# A node of type manager must have a name or a surname (or both)
+
+:testshape a sh:NodeShape ;
+    sh:or (
+        [
+            a sh:PropertyShape ;
+            sh:path :manages ;
+            sh:minCount 1
+        ]
+        [
+            a sh:PropertyShape ;
+            sh:path :onVacation ;
+            sh:hasValue true 
+        ]
+     ) .
+# :manager1 :manager2 :manager3
+
+:testshape sh:targetClass :manager .

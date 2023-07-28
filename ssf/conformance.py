@@ -3,10 +3,10 @@ from typing import Optional
 
 from slsparser.shapels import parse
 from slsparser.utilities import expand_shape
-from unaryquery import to_uq
+from ssf.unaryquery import to_uq
 
 
-def conforms(data_graph: rdflib.Graph, shapes_graph: rdflib.graph):
+def conforms(data_graph: rdflib.Graph, shapes_graph: rdflib.Graph):
     not_conforms = []
     conforms = []
 
@@ -56,11 +56,12 @@ def _result_to_set(result: rdflib.query.Result) -> set:
 # and for the shape fragment queries.
 
 from slsparser.shapels import SANode
+from slsparser.shapels import Op
 
 def optimize_conformance(node: SANode) -> Optional[SANode]:
     '''
     This function optimizes the sanode for logical equivalence in the
-    sense that trivally true subshapes, as well as redundand subshapes.
+    sense that trivally true subshapes, as well as redundand subshapes,
     are handled. 
     GOALS:
         - We should try to minimize the use of TOP 
@@ -68,7 +69,6 @@ def optimize_conformance(node: SANode) -> Optional[SANode]:
         - We should try to minimize the use of EQ/DISJ
     RULES:
         - replace NEG TOP with BOT
-        - replace FORALL E BOT with BOT
         - replace AND with BOT with BOT
         - remove TOP from AND, if empty, replace with TOP
         - remove identical shapes from AND/OR
@@ -78,4 +78,66 @@ def optimize_conformance(node: SANode) -> Optional[SANode]:
         - replace FORALL E TOP with TOP
         - replace countrange "n > 1" None HASVALUE with BOT
     '''
-    pass
+
+    new_children = []
+    for child in node.children:
+        if isinstance(child, SANode):
+            new_child = optimize_conformance(child)
+            if new_child:
+                new_children.append(new_child)
+        else:
+            new_children.append(child)
+
+    node.children = new_children
+
+    if node.op == Op.NOT and node.children[0] == Op.TOP:
+        return SANode(Op.BOT, [])
+    
+    if node.op == Op.NOT and node.children[0] == Op.BOT:
+        return SANode(Op.TOP, [])
+    
+    if node.op == Op.AND and any(map(lambda c: c.op == Op.BOT, node.children)):
+        return SANode(Op.BOT, [])
+    
+    if node.op == Op.OR and any(map(lambda c: c.op == Op.TOP, node.children)):
+        return SANode(Op.TOP, [])
+    
+    if node.op == Op.AND and any(map(lambda c: c.op == Op.TOP, node.children)):
+        node.children = list(filter(lambda c: c.op != Op.TOP, node.children))
+        if len(node.children) == 1:
+            return node.children[1]
+        elif len(node.children) == 0:
+            return SANode(Op.TOP, [])
+        return node
+        
+    if node.op == Op.OR and any(map(lambda c: c.op == Op.BOT, node.children)):
+        node.children = list(filter(lambda c: c.op != Op.BOT, node.children))
+        if len(node.children) == 1:
+            return node.children[1]
+        elif len(node.children) == 0:
+            return SANode(Op.BOT, [])
+        return node
+    
+    if node.op == Op.NOT:
+        numnot = _count_not_depth(node)
+        child = _get_first_shape_from_not(node)
+        if numnot % 2 == 0:
+            return child
+        return SANode(Op.NOT, child)
+    
+    if node.op == Op.FORALL and node.children[1].op == Op.TOP:
+        return SANode(Op.TOP, [])
+    
+    return node
+    
+
+def _count_not_depth(node: SANode) -> int:
+    if node.op != Op.NOT:
+        return 0
+    return _count_not_depth(node.child[0]) + 1
+
+
+def _get_first_shape_from_not(node: SANode) -> SANode:
+    if node.op != Op.NOT:
+        return node
+    return _get_first_shape_from_not(node.child[0])

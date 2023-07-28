@@ -1,0 +1,26 @@
+@prefix : <http://example.org/> .
+
+:manager1 a :manager ;
+    :manages :user1 ;
+    :firstName "Dantes" ;
+    :givenName "Dantes" ;
+    :friend :manager2 .
+
+:manager2 a :manager ;
+    :manages :user1 ;
+    :colleague :user1 ;
+    :friend :user1 .
+
+:manager3 a :manager ;
+    :firstName "Villefort" ;
+    :onVacation true ;
+    :CEO-of :MyCompany .
+
+:user1 a :user ;
+    :phone "123" ;
+    :colleague :manager2 ;
+    :colleague :user2 ;
+    :friend :manager2 .
+
+:user2 a :user ;
+    :knows :manager3 .

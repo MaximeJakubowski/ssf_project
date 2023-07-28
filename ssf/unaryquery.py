@@ -1,9 +1,9 @@
 from slsparser.shapels import SANode, Op
 from slsparser.pathls import PANode, POp
-from rdflib.namespace import SH
+from rdflib.namespace import SH, URIRef
 from typing import List, Optional
 
-from sparql_conformance import (
+from ssf.sparql_conformance import (
     _build_all_query,
     _build_closed_query,
     _build_countrange_query,
@@ -60,6 +60,7 @@ def to_path(node: PANode) -> str:
     if node.pop == POp.ZEROORONE:
         return '(' + to_path(node.children[0]) + ')+'
 
+    return ''
 
 def to_uq(node: SANode) -> str:
     """to unary query; assumes shape is expanded"""
@@ -105,7 +106,7 @@ def to_uq(node: SANode) -> str:
                                      to_path(node.children[1]))
 
     if node.op == Op.EQ:
-        if node.children[0] == POp.ID:
+        if node.children[0].pop == POp.ID:
             return _build_equality_id_query(to_path(node.children[1]))
         return _build_equality_query(to_path(node.children[0]),
                                      to_path(node.children[1]))
@@ -113,8 +114,8 @@ def to_uq(node: SANode) -> str:
     if node.op == Op.FORALL:
         if node.children[1].op == Op.TEST:
             return _build_forall_test_query(to_path(node.children[0]), 
-                                            _build_filter_condition(child.children))
-        return _build_forall_query(to_path(node.children[0]), to_uq(child))
+                                            _build_filter_condition(node.children[1].children, var = '?o'))
+        return _build_forall_query(to_path(node.children[0]), to_uq(node.children[0]))
 
     if node.op == Op.COUNTRANGE:
         mincount = int(node.children[0])
@@ -132,11 +133,15 @@ def to_uq(node: SANode) -> str:
             return _build_maxcount_qualified_query(maxcount, path, to_uq(shape))
 
         if mincount == 1 and shape.op == Op.HASVALUE:
-            return _build_exists_hasvalue_query(path, str(shape.children[0]))
+            value = shape.children[0]
+            str_value = str(value)
+            if isinstance(value, URIRef):
+                str_value = f'<{str_value}>'
+            return _build_exists_hasvalue_query(path, str_value)
 
         if shape.op == Op.TEST:
             return _build_countrange_test_query(mincount, maxcount, path, 
-                                                _build_filter_condition(shape.children))
+                                                _build_filter_condition(shape.children, var='?o'))
 
         if shape.op == Op.TOP:
             return _build_countrange_top_query(mincount, maxcount, path)

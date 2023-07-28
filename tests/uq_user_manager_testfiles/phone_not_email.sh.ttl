@@ -1,0 +1,22 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix : <http://example.org/> .
+
+# All nodes of type user must have a phone property, but no email property.
+
+
+:testshape a sh:NodeShape ;
+    sh:property [
+        a sh:PropertyShape ;
+        sh:path :phone ;
+        sh:minCount 1;
+    ] ;
+    sh:not [
+         sh:property [
+            a sh:PropertyShape ;
+            sh:path :email ;
+            sh:minCount 1;
+        ] ;
+    ] .
+# :user1
+
+:testshape sh:targetClass :user .

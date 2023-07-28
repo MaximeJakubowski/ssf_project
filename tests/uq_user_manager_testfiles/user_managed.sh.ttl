@@ -1,0 +1,14 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix : <http://example.org/> .
+
+# All nodes of type user are managed by at least two nodes.
+
+:testshape a sh:NodeShape ;
+    sh:property [
+        a sh:PropertyShape ;
+        sh:path [ sh:inversePath :manages ] ;
+        sh:minCount 2 ;
+    ] .
+# :user1
+
+:testshape sh:targetClass :user .

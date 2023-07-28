@@ -1,0 +1,14 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix : <http://example.org/> .
+
+# The user node must have a node in common for the properties colleague and friend
+
+:testshape a sh:NodeShape ;
+    sh:not [
+        a sh:PropertyShape ;
+        sh:path :colleague ;
+        sh:disjoint :friend ;
+    ].
+# :user1 :manager2
+
+:testshape sh:targetClass :user .

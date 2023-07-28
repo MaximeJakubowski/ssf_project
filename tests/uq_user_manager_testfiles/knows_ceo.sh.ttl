@@ -1,0 +1,19 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix : <http://example.org/> .
+
+# Nodes of type user have at least one know property to the CEO of MyCompany
+
+:testshape a sh:NodeShape ;
+    sh:property [
+        a sh:PropertyShape ;
+        sh:path :knows ;
+        sh:qualifiedValueShape [
+            a sh:PropertyShape ;
+            sh:path :CEO-of ;
+            sh:hasValue :MyCompany ;
+        ] ;
+        sh:qualifiedMinCount 1 ;
+    ] .
+# :user2
+
+:testshape sh:targetClass :user .

@@ -1,7 +1,6 @@
 from typing import List, Optional
 
 from rdflib import SH
-from rdflib.term import Identifier
 
 ## GENERAL
 
@@ -40,7 +39,7 @@ def _build_closed_query(properties: List[str]) -> str:
     propstr = ''
     for prop in properties:
         propstr += prop + ', '
-    return _build_query(f'?s ?p ?o FILTER ?p NOT IN ( {propstr[:-2]} )')
+    return _build_negate(f'?v ?p ?o FILTER (?p NOT IN ( {propstr[:-2]} ))')
 
 ## DISJOINT
 
@@ -105,21 +104,20 @@ def _build_forall_test_query(path: str, filter_condition: str):
 ## COUNTRANGE
 
 def _countrange_group_condition(mincount: int, maxcount: Optional[int]):
-    if mincount == 0: # then we cannot do countrange this way
-        raise ValueError('Cannot build countrange: maxcount')
-    if maxcount == 1: # then it must only exist
+    # if mincount == 0: # then we cannot do countrange this way
+    #     raise ValueError('Cannot build countrange: maxcount')
+    if mincount == 1 and maxcount is None: # then it must only exist
         return ''
     if mincount == maxcount:
         return f' GROUP BY ?v HAVING ( COUNT(?o) = {str(mincount)} )'
     return f' GROUP BY ?v HAVING ( COUNT(?o) >= {str(mincount)} ' + \
-           f'{ f"&& COUNT(?o) <= {str(maxcount)} )" if maxcount else ")" })'
+           f'{ f"&& COUNT(?o) <= {str(maxcount)} )" if maxcount else ")" }'
 
 
 def _build_countrange_query(mincount: int, maxcount: Optional[int], 
                             path: str, shape: str) -> str:
-    return _build_query(f'''
-    ?v {path} ?o .
-    {{ SELECT (?v AS ?o) WHERE {{ {shape} }} }}''') + \
+    return _build_query(f'?v {path} ?o . ' + \
+                        f'{{ SELECT (?v AS ?o) WHERE {{ {shape} }} }}') + \
         _countrange_group_condition(mincount, maxcount)
 
 
@@ -163,14 +161,14 @@ def _build_maxcount_test_query(num: int, path: str,
 ## LESSTHAN
 
 def _build_lt_query(path: str, prop: str) -> str:
-    return _build_query(f'?v {path} ?e' + 
-        f'FILTER NOT EXISTS {{ ?v {prop} ?p FILTER ( ?p >= ?e )}}')
+    return _build_query(f'?v {path} ?e ' + 
+        f'FILTER NOT EXISTS {{ ?v {prop} ?p FILTER ( ?e >= ?p )}}')
 
 ## LESSTHANEQ
 
 def _build_lte_query(path: str, prop: str) -> str:
     return _build_query(f'?v {path} ?e' + 
-        f'FILTER NOT EXISTS {{ ?v {prop} ?p FILTER ( ?p > ?e )}}')
+        f'FILTER NOT EXISTS {{ ?v {prop} ?p FILTER ( ?e > ?p )}}')
 
 ## HASVALUE
 
@@ -247,8 +245,18 @@ def _build_filter_condition(parameters: List, negate: bool=False, var: str='?v')
             if range_type == 'min_length':
                 out += f'&& {neg}( strlen({var}) >= {str(range_value)} )'
             if range_type == 'max_length':
-                return f'&& {neg}( strlen({var}) <= {str(range_value)} )'
+                out += f'&& {neg}( strlen({var}) <= {str(range_value)} )'
         return f'{out[3:]}' # no &&
+    
+    if test_type == 'languageIn':
+        languages = parameters[1]
+        return f'( lang({var}) {"NOT" if neg else ""} IN {_as_sparql_strlist(languages)})'
 
+    return ''
 
+def _as_sparql_strlist(l: List) -> str:
+    out = '('
+    for elem in l:
+        out += f' "{str(elem)}",'
+    return out[:-1 ] + ' )'
 

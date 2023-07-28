@@ -1,0 +1,7 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix : <http://example.org/> .
+
+:testshape a sh:NodeShape ;
+    sh:nodeKind sh:IRI .
+# :node1 :node2 :node3 :node4 :node5 :node6

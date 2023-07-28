@@ -1,0 +1,18 @@
+@prefix : <http://example.org/> .
+
+:node1 :country "belgium"@en ;
+    :country "Belgie"@nl.
+
+:node2 :country "Luxemburg"@nl ;
+    :country "Groot Hertogdom Luxemburg"@nl .
+
+:node3 :age 33 .
+
+:node4 :age 34 ;
+    :age "34" .
+
+:node5 :start 1 ;
+    :end 2 .
+
+:node6 :start 1 ;
+    :end 1 .

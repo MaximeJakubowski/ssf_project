@@ -5,7 +5,7 @@ from slsparser.shapels import SANode, Op
 from slsparser.utilities import negation_normal_form, expand_shape
 
 from rdflib import Graph, URIRef, Namespace
-from sfquery import to_sfquery
+from ssf.sfquery import to_sfquery
 
 '''
 ssf stands for Sparql Shape Fragments

@@ -1,0 +1,13 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix : <http://example.org/> .
+
+# The user node may only have properties mentioned in ignoredProperties
+
+:testshape a sh:NodeShape ;
+    sh:class :user ;
+    sh:closed true ;
+    sh:ignoredProperties (:colleague :friend :phone rdf:type) .
+# :user1
+
+:testshape sh:targetNode :user .
