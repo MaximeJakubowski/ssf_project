@@ -199,16 +199,17 @@ def _build_filter_condition(parameters: List, negate: bool=False, var: str='?v')
 
     test_type = parameters[0]
 
-    if test_type == 'pattern':
+    if test_type == SH['PatternConstraintComponent']:
         fmt_flags = ''
         pattern_flags = parameters[2]
         for flag in pattern_flags:
             fmt_flags += str(flag)
         return f'{neg}regex({var}, "{str(parameters[1])}", "{fmt_flags}")'
 
-    if test_type == 'datatype':
+    if test_type == SH['DatatypeConstraintComponent']:
         return f'{neg}(datatype({var}) = <{str(parameters[1])}>)'
-    if test_type == 'nodekind':
+    
+    if test_type == SH['NodeKindConstraintComponent']:
         if parameters[1] == SH.IRI:
             return f'{neg}isIRI({var})'
         if parameters[1] == SH.Literal:
@@ -227,13 +228,13 @@ def _build_filter_condition(parameters: List, negate: bool=False, var: str='?v')
         for i in range(1, len(parameters)-1, 2):
             range_type = parameters[i]
             range_value = parameters[i+1]
-            if range_type == 'min_exclusive':
+            if range_type == SH['MinExclusiveConstraintComponent']:
                 out += f'&& {neg}( {var} > {str(range_value)} )'
-            if range_type == 'max_exclusive':
+            if range_type == SH['MaxExclusiveConstraintComponent']:
                 out += f'&& {neg}( {var} < {str(range_value)} )'
-            if range_type == 'min_inclusive':
+            if range_type == SH['MinInclusiveConstraintComponent']:
                 out += f'&& {neg}( {var} >= {str(range_value)} )'
-            if range_type == 'max_inclusive':
+            if range_type == SH['MaxInclusiveConstraintComponent']:
                 out += f'&& {neg}( {var} <= {str(range_value)} )'
         return f'{out[3:]}' # no &&
     
@@ -242,13 +243,13 @@ def _build_filter_condition(parameters: List, negate: bool=False, var: str='?v')
         for i in range(1, len(parameters)-1, 2):
             range_type = parameters[i]
             range_value = parameters[i+1]
-            if range_type == 'min_length':
+            if range_type == SH['MinLengthConstraintComponent']:
                 out += f'&& {neg}( strlen({var}) >= {str(range_value)} )'
-            if range_type == 'max_length':
+            if range_type == SH['MaxLengthConstraintComponent']:
                 out += f'&& {neg}( strlen({var}) <= {str(range_value)} )'
         return f'{out[3:]}' # no &&
     
-    if test_type == 'languageIn':
+    if test_type == SH['LanguageInConstraintComponent']:
         languages = parameters[1]
         return f'( lang({var}) {"NOT" if neg else ""} IN {_as_sparql_strlist(languages)})'
 

@@ -75,7 +75,7 @@ def negation_normal_form(node: SANode) -> SANode:
     return node
 
 
-def clean_parsetree(sanode: SANode) -> SANode:
+def clean_parsetree(sanode: SANode, full: bool = True) -> SANode:
     """
     This function goes through the tree in post-order. It performs the 
     following transformations:
@@ -97,10 +97,13 @@ def clean_parsetree(sanode: SANode) -> SANode:
     new_children = []
     for child in sanode.children:
         if type(child) == SANode:
-            new_child = clean_parsetree(child)
+            new_child = clean_parsetree(child, full)
             new_children.append(new_child)
         else:
             new_children.append(child)
+
+    if full and sanode.constraintComponent is not None:
+        return sanode
 
     new_node = SANode(sanode.op, new_children)
 

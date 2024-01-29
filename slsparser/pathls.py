@@ -29,6 +29,7 @@ class PANode:  # Path Algebra Node
         """ Overwrite the '==' operator """
         if not isinstance(other, PANode):
             return False
+
         if self.pop == POp.PROP:
             return self.pop == other.pop and \
               self.children[0] == other.children[0]
@@ -68,6 +69,19 @@ def _parse_prop(prop: URIRef) -> PANode:
 
 
 def _parse_path(graph: Graph, path: BNode) -> PANode:
+    # Composition needs to be checked first: the syntax rules state that exactly
+    # one of the path rules may be satisfied. Checking the composition first 
+    # eliminates some possibility of a wrong interpretation.
+
+    # Composition of paths
+    if (path, RDF.first, None) in graph:
+        shacl_list = Collection(graph, path)
+        children = []
+        for item in shacl_list:
+            step = parse(graph, item)
+            children.append(step)
+        return PANode(POp.COMP, children)
+
     # Basic path constructors, except composition and alternative path
     transl = {SH.inversePath: POp.INV,
               SH.zeroOrMorePath: POp.KLEENE,
@@ -94,14 +108,5 @@ def _parse_path(graph: Graph, path: BNode) -> PANode:
             step = parse(graph, item)
             children.append(step)
         return PANode(POp.ALT, children)
-
-    # Composition of paths
-    if (path, RDF.first, None) in graph:
-        shacl_list = Collection(graph, path)
-        children = []
-        for item in shacl_list:
-            step = parse(graph, item)
-            children.append(step)
-        return PANode(POp.COMP, children)
 
     raise ValueError(f'The path {path} is not well-formed')

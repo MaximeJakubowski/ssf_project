@@ -5,7 +5,6 @@ from slsparser.shapels import parse
 from slsparser.utilities import expand_shape
 from ssf.unaryquery import to_uq
 
-
 def conforms(data_graph: rdflib.Graph, shapes_graph: rdflib.Graph):
     not_conforms = []
     conforms = []

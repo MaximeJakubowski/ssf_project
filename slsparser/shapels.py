@@ -1,4 +1,6 @@
-from typing import List, Optional, Dict
+from __future__ import annotations
+from typing import List, Optional, Tuple
+from itertools import repeat
 from enum import Enum, auto
 
 from rdflib import Graph
@@ -16,22 +18,23 @@ class Op(Enum):
     OR = auto() # Op.OR SANode SANode ...
     TEST = auto() # Op.TEST "testname" argument
     # possible testnames: [testname, element1, element2, ...]
-    # - [languageIn ["en", "nl", ...]]
-    # - [datatype, xsd:string] or other datatypes
-    # - [nodekind, sh:iri] or other: any of the six combinations
-    # - [pattern, patternstring, flags] 
+    # - [sh:LanguageInConstraintComponent ...]
+    # - [sh:DatatypeConstraintComponent, xsd:string] or other datatypes
+    # - [sh:NodeKindConstraintComponent, sh:iri] or other: any of the six combinations
+    # - [sh:PatternConstraintComponent, patternstring, flags]
     # - [numeric_range, <range_statement>, <value>]
-    #   - <range_statement> is one of: min_exclusive, max_exclusive, min_inclusive, max_inclusive
+    #   - <range_statement> is one of: sh:MinExclusiveConstraintComponent, sh:MaxExclusiveConstraintComponent,
+    #       sh:MinInclusiveConstraintComponent, sh:MaxInclusiveConstraintComponent
     #   - <value> is an rdflib literal (numeric) value
-    #   There is at most one of min_... and at most one of max_... followed by a value 
+    #   There is at most one of min_... and at most one of max_... followed by a value
     # - [length_range, <range_statement>, <value>]
-    #   - <range_statement> is one of: min_length, max_length
+    #   - <range_statement> is one of: sh:MinLengthConstraintComponent, sh:MaxLengthConstraintComponent
     #   - <value> is an rdflib literal (numeric) value
-    #   There is at most one of min_... and at most one of max_... followed by a value 
+    #   There is at most one of min_... and at most one of max_... followed by a value
     HASSHAPE = auto() # Op.HASSHAPE iri
-    FORALL = auto() # Op.FORALL number PANode SANode
+    FORALL = auto() # Op.FORALL PANode SANode
     EQ = auto() # Op.EQ PANode PANode
-    DISJ = auto() # Op.DISJ PANode PANode 
+    DISJ = auto() # Op.DISJ PANode PANode
     # for eq(id,p) and disj(id,p) I add id to pathls.POp.ID
     CLOSED = auto() # Op.CLOSED iri iri ...
     LESSTHAN = auto() # Op.LESSTHAN PANode PANode
@@ -44,9 +47,10 @@ class Op(Enum):
 
 
 class SANode:  # Shape Algebra Node
-    def __init__(self, op: Op, children: List):
+    def __init__(self, op: Op, children: List, constraintComponent: URIRef | Tuple[URIRef, ...]| None = None):
         self.op = op
         self.children = children
+        self.constraintComponent = constraintComponent
 
     def __eq__(self, other):
         """ Overwrite the '==' operator """
@@ -62,12 +66,13 @@ class SANode:  # Shape Algebra Node
                 continue
             same_children = same_children and child_self == child_other
 
-        return (self.op == other.op) and same_children
+        return (self.op == other.op) and same_children and\
+            self.constraintComponent == other.constraintComponent
 
     def __repr__(self):
         """ Pretty representation of the SANode tree """
         out = '\n('
-        out += str(self.op) + ' '
+        out += str(self.op) + '  cc=' + str(self.constraintComponent) + ' '
         for c in self.children:
             for line in c.__repr__().split('\n'):
                 out += ' ' + line + '\n'
@@ -96,7 +101,7 @@ def _extract_nodeshapes(graph: Graph) -> List[Node]:
     return nodeshapes
 
 
-def parse(graph: Graph):
+def parse(graph: Graph, full: bool = True):
     from slsparser.utilities import clean_parsetree
 
     definitions = {}  # a mapping: shapename, SANode
@@ -105,7 +110,7 @@ def parse(graph: Graph):
     nodeshapes = _extract_nodeshapes(graph)
 
     for nodeshape in nodeshapes:
-        definitions[nodeshape] = clean_parsetree(_nodeshape_parse(graph, nodeshape))
+        definitions[nodeshape] = clean_parsetree(_nodeshape_parse(graph, nodeshape), full)
         target[nodeshape] = _target_parse(graph, nodeshape)
 
     # this defines what propertyshapes are parsed, should follow the spec on
@@ -119,7 +124,7 @@ def parse(graph: Graph):
     for propertyshape in propertyshapes:
         path = _extract_parameter_values(graph, propertyshape, SH.path)[0]
         parsed_path = pparse(graph, path)
-        definitions[propertyshape] = clean_parsetree(_propertyshape_parse(graph, parsed_path, propertyshape))
+        definitions[propertyshape] = clean_parsetree(_propertyshape_parse(graph, parsed_path, propertyshape), full)
         target[propertyshape] = _target_parse(graph, propertyshape)
 
     return definitions, target
@@ -131,18 +136,26 @@ def _target_parse(graph: Graph, shapename: Node) -> SANode:
         out.children.append(SANode(Op.HASVALUE, [tnode]))
 
     for tclass in _extract_parameter_values(graph, shapename, SH.targetClass):
-        out.children.append(SANode(Op.COUNTRANGE, [
-            Literal(1),
-            None,
-            PANode(POp.PROP, [RDF.type]),
-            SANode(Op.HASVALUE, [tclass])]))
+        out.children.append(SANode(
+            Op.COUNTRANGE,
+            [
+                Literal(1), None, PANode(POp.COMP, [
+                    PANode(POp.PROP, [RDF.type]),
+                    PANode(POp.KLEENE, [PANode(POp.PROP, [RDFS.subClassOf])])
+                ]),
+                SANode(Op.HASVALUE, [tclass])
+            ]))
 
     if (shapename, RDF.type, RDFS.Class) in graph:
-        out.children.append(SANode(Op.COUNTRANGE, [
-            Literal(1),
-            None,
-            PANode(POp.PROP, [RDF.type]),
-            SANode(Op.HASVALUE, [shapename])]))
+        out.children.append(SANode(
+            Op.COUNTRANGE,
+            [
+                Literal(1), None, PANode(POp.COMP, [
+                    PANode(POp.PROP, [RDF.type]),
+                    PANode(POp.KLEENE, [PANode(POp.PROP, [RDFS.subClassOf])])
+                ]),
+                SANode(Op.HASVALUE, [shapename])
+            ]))
 
     for tsub in _extract_parameter_values(graph, shapename,
                                           SH.targetSubjectsOf):
@@ -200,9 +213,15 @@ def _propertyshape_parse(graph: Graph, path: PANode,
 
 
 def _shape_parse(graph: Graph, shapename: Node) -> list[SANode]:
-    shapes = list(graph.objects(shapename, SH.node))
-    shapes += list(graph.objects(shapename, SH.property))
-    return [SANode(Op.HASSHAPE, [shape]) for shape in shapes]
+    shapes = list(
+        zip(graph.objects(shapename, SH.node),
+            repeat(SH.NodeConstraintComponent))
+    )
+    shapes += list(
+        zip(graph.objects(shapename, SH.property),
+            repeat(SH.PropertyConstraintComponent))
+    )
+    return [SANode(Op.HASSHAPE, [shape], cc) for shape, cc in shapes]
 
 
 def _logic_parse(graph: Graph, shapename: Node) -> list[SANode]:
@@ -211,17 +230,17 @@ def _logic_parse(graph: Graph, shapename: Node) -> list[SANode]:
     conj_out = []
 
     for nshape in _extract_parameter_values(graph, shapename, SH['not']):
-        conj_out.append(SANode(Op.NOT, [SANode(Op.HASSHAPE, [nshape])]))
+        conj_out.append(SANode(Op.NOT, [SANode(Op.HASSHAPE, [nshape])], SH.NotConstraintComponent))
 
     for ashape in _extract_parameter_values(graph, shapename, SH['and']):
         shacl_list = Collection(graph, ashape)
         conj_list = [SANode(Op.HASSHAPE, [s]) for s in shacl_list]
-        conj_out.append(SANode(Op.AND, conj_list))
+        conj_out.append(SANode(Op.AND, conj_list, SH.AndConstraintComponent))
 
     for oshape in _extract_parameter_values(graph, shapename, SH['or']):
         shacl_list = Collection(graph, oshape)
         disj_list = [SANode(Op.HASSHAPE, [s]) for s in shacl_list]
-        conj_out.append(SANode(Op.OR, disj_list))
+        conj_out.append(SANode(Op.OR, disj_list, SH.OrConstraintComponent))
 
     for xshape in _extract_parameter_values(graph, shapename, SH.xone):
         shacl_list = Collection(graph, xshape)
@@ -234,7 +253,7 @@ def _logic_parse(graph: Graph, shapename: Node) -> list[SANode]:
                         SANode(Op.NOT, [SANode(Op.HASSHAPE, [not_s])]))
             _disj_out.append(single_xone)
         if _disj_out:
-            conj_out.append(SANode(Op.OR, _disj_out))
+            conj_out.append(SANode(Op.OR, _disj_out, SH.XoneConstraintComponent))
 
     return conj_out
 
@@ -248,17 +267,17 @@ def _tests_parse(graph: Graph, shapename: Node) -> list[SANode]:
             SANode(Op.COUNTRANGE, [Literal(1), None, PANode(POp.COMP, [
                 PANode(POp.PROP, [RDF.type]),
                 PANode(POp.KLEENE, [PANode(POp.PROP, [RDFS.subClassOf])])]),
-                            SANode(Op.HASVALUE, [sh_class])]))
+                            SANode(Op.HASVALUE, [sh_class])], SH.ClassConstraintComponent))
 
     # sh:datatype
     for sh_datatype in _extract_parameter_values(graph, shapename,
                                                  SH.datatype):
-        conj_out.append(SANode(Op.TEST, ['datatype', sh_datatype]))
+        conj_out.append(SANode(Op.TEST, [SH.DatatypeConstraintComponent, sh_datatype], SH.DatatypeConstraintComponent))
 
     # sh:nodeKind
     for sh_nodekind in _extract_parameter_values(graph, shapename,
                                                  SH.nodeKind):
-        conj_out.append(SANode(Op.TEST, ['nodekind', sh_nodekind]))
+        conj_out.append(SANode(Op.TEST, [SH.NodeKindConstraintComponent, sh_nodekind], SH.NodeKindConstraintComponent))
 
     # numeric_range
     numeric_range_shape = _numeric_range_parse(graph, shapename)
@@ -279,7 +298,7 @@ def _tests_parse(graph: Graph, shapename: Node) -> list[SANode]:
         # something strange is going on with character escapes
         # if a pattern contains a double backslash 'hello\\w' for example
         # it will be read by the rdflib parser as 'hello\w'
-        conj_out.append(SANode(Op.TEST, ['pattern', escaped_pattern, flags]))
+        conj_out.append(SANode(Op.TEST, [SH.PatternConstraintComponent, escaped_pattern, flags], SH.PatternConstraintComponent))
 
     return conj_out
 
@@ -295,13 +314,13 @@ def _length_range_parse(graph: Graph, shapename: Node) -> Optional[SANode]:
 
     length_range = ['length_range']
     if max_minlen is not None:
-        length_range += ['min_length', max_minlen]
+        length_range += [SH.MinLengthConstraintComponent, max_minlen]
 
     if min_maxlen is not None:
-        length_range += ['max_length', min_maxlen]
+        length_range += [SH.MaxLengthConstraintComponent, min_maxlen]
 
     if len(length_range) > 1:
-        return SANode(Op.TEST, length_range)
+        return SANode(Op.TEST, length_range, tuple(filter(lambda x: isinstance(x, URIRef), length_range)))
 
 
 def _numeric_range_parse(graph: Graph, shapename: Node) -> Optional[SANode]:
@@ -313,9 +332,9 @@ def _numeric_range_parse(graph: Graph, shapename: Node) -> Optional[SANode]:
     
     # do we use min_exlusive? (instead of inclusive)
     min_exclusive = False
-    if max_minincl and max_minexcl:
+    if max_minincl is not None and max_minexcl is not None:
         min_exclusive = max_minexcl >= max_minincl
-    elif max_minexcl:
+    elif max_minexcl is not None:
         min_exclusive = True
     
     # sh:maxInclusive / sh:maxExclusive    
@@ -326,30 +345,30 @@ def _numeric_range_parse(graph: Graph, shapename: Node) -> Optional[SANode]:
         
     # do we use max_exlusive?
     max_exclusive = False
-    if min_maxincl and min_maxexcl:
+    if min_maxincl is not None and min_maxexcl is not None:
         max_exclusive = min_maxexcl < min_maxincl
-    elif min_maxexcl:
+    elif min_maxexcl is not None:
         max_exclusive = True
 
     # do we use numeric_min? was it present?
-    numeric_min = max_minexcl or max_minincl 
+    numeric_min = max_minexcl is not None or max_minincl is not None
     
     # do we use numeric_max? was it present?
-    numeric_max = min_maxexcl or min_maxincl 
+    numeric_max = min_maxexcl is not None or min_maxincl is not None
 
     # construct numeric min/max TEST children 
     numeric_range = ['numeric_range']
     if numeric_min and min_exclusive:
-        numeric_range += ['min_exclusive', max_minexcl]
+        numeric_range += [SH.MinExclusiveConstraintComponent, max_minexcl]
     if numeric_min and not min_exclusive:
-        numeric_range += ['min_inclusive', max_minincl]
+        numeric_range += [SH.MinInclusiveConstraintComponent, max_minincl]
     if numeric_max and max_exclusive:
-        numeric_range += ['max_exclusive', min_maxexcl]
+        numeric_range += [SH.MaxExclusiveConstraintComponent, min_maxexcl]
     if numeric_max and not max_exclusive:
-        numeric_range += ['max_inclusive', min_maxincl]
+        numeric_range += [SH.MaxInclusiveConstraintComponent, min_maxincl]
 
     if len(numeric_range) > 1:
-        return SANode(Op.TEST, numeric_range)
+        return SANode(Op.TEST, numeric_range, tuple(filter(lambda x: isinstance(x, URIRef), numeric_range)))
 
 
 def _max_literal(list: List[Literal], invert=False) -> Optional[Literal]:
@@ -373,7 +392,7 @@ def _min_literal(list: List[Literal]) -> Optional[Literal]:
 def _value_parse(graph: Graph, shapename: Node) -> list[SANode]:
     conj_out = []
     for sh_value in _extract_parameter_values(graph, shapename, SH.hasValue):
-        conj_out.append(SANode(Op.HASVALUE, [sh_value]))
+        conj_out.append(SANode(Op.HASVALUE, [sh_value], SH.HasValueConstraintComponent))
     return conj_out
 
 
@@ -381,7 +400,7 @@ def _in_parse(graph: Graph, shapename: Node) -> list[SANode]:
     conj_out = []
     for sh_in in _extract_parameter_values(graph, shapename, SH['in']):
         shacl_list = Collection(graph, sh_in)
-        disj = SANode(Op.OR, [])
+        disj = SANode(Op.OR, [], SH.InConstraintComponent)
         for val in shacl_list:
             disj.children.append(SANode(Op.HASVALUE, [val]))
         conj_out.append(disj)
@@ -407,7 +426,7 @@ def _closed_parse(graph: Graph, shapename: Node) -> list[SANode]:
 
     closed_props = sh_ignored + direct_props
     children = [PANode(POp.PROP, [prop]) for prop in closed_props]
-    return [SANode(Op.CLOSED, children)]
+    return [SANode(Op.CLOSED, children, SH.ClosedConstraintComponent)]
 
 
 def _card_parse(graph: Graph, path: PANode, shapename: Node) -> list[SANode]:
@@ -416,12 +435,18 @@ def _card_parse(graph: Graph, path: PANode, shapename: Node) -> list[SANode]:
     largest_max = _max_literal(
         _extract_parameter_values(graph, shapename, SH.maxCount))
             
-    if not (smallest_min or largest_max):
+    if smallest_min is None and largest_max is None:
         return []
-    
-    return [SANode(Op.COUNTRANGE, [smallest_min if smallest_min else Literal(0),
+    elif smallest_min is None:
+        cc = SH.MaxCountConstraintComponent
+    elif largest_max is None:
+        cc = SH.MinCountConstraintComponent
+    else:
+        cc = (SH.MinCountConstraintComponent, SH.MaxCountConstraintComponent)
+
+    return [SANode(Op.COUNTRANGE, [smallest_min if smallest_min is not None else Literal(0),
                                    largest_max, # can be none
-                                   path, SANode(Op.TOP, [])])]
+                                   path, SANode(Op.TOP, [])], cc)]
 
 
 def _pair_parse(graph: Graph, path: PANode, shapename: Node) -> list[SANode]:
@@ -430,23 +455,27 @@ def _pair_parse(graph: Graph, path: PANode, shapename: Node) -> list[SANode]:
     # sh:equals
     for eq in _extract_parameter_values(graph, shapename, SH.equals):
         conj_out.append(SANode(Op.EQ, [path,
-                                       pparse(graph, eq)]))
+                                       pparse(graph, eq)],
+                               SH.EqualsConstraintComponent))
 
     # sh:disjoint
     for disj in _extract_parameter_values(graph, shapename, SH.disjoint):
         conj_out.append(SANode(Op.DISJ, [path,
-                                         pparse(graph, disj)]))
+                                         pparse(graph, disj)],
+                               SH.DisjointConstraintComponent))
 
     # sh:lessThan
     for lt in _extract_parameter_values(graph, shapename, SH.lessThan):
         conj_out.append(SANode(Op.LESSTHAN, [path,
-                                             pparse(graph, lt)]))
+                                             pparse(graph, lt)],
+                               SH.LessThanConstraintComponent))
 
     # sh:lessThanEq
     for lte in _extract_parameter_values(graph, shapename,
                                          SH.lessThanOrEquals):
         conj_out.append(SANode(Op.LESSTHANEQ, [path,
-                                               pparse(graph, lte)]))
+                                               pparse(graph, lte)],
+                               SH.LessThanOrEqualsConstraintComponent))
 
     return conj_out
 
@@ -482,10 +511,21 @@ def _qual_parse(graph: Graph, path: PANode, shapename: Node) -> list[SANode]:
 
         smallest_min = _min_literal(qual_min)
         largest_max = _max_literal(qual_max)
+        if smallest_min is None and largest_max is None:
+            continue
+        elif smallest_min is None:
+            cc = SH.QualifiedMaxCountConstraintComponent
+        elif largest_max is None:
+            cc = SH.QualifiedMinCountConstraintComponent
+        else:
+            cc = (
+                SH.QualifiedMinCountConstraintComponent,
+                SH.QualifiedMaxCountConstraintComponent
+            )
 
-        conj_out.append(SANode(Op.COUNTRANGE, [smallest_min if smallest_min else Literal(0),
+        conj_out.append(SANode(Op.COUNTRANGE, [smallest_min if smallest_min is not None else Literal(0),
                                                largest_max, # can be None
-                                               path, result_qvs]))
+                                               path, result_qvs], cc))
 
     return conj_out
 
@@ -516,12 +556,12 @@ def _lang_parse(graph: Graph, path: PANode, shapename: Node) -> list[SANode]:
         literal_list += [tag for tag in shacl_list]
 
     if literal_list:
-        _out = SANode(Op.TEST, ['languageIn', literal_list])
+        _out = SANode(Op.TEST, [SH.LanguageInConstraintComponent, literal_list], SH.LanguageInConstraintComponent)
         conj_out.append(SANode(Op.FORALL, [path, _out]))
 
     # sh:uniqueLang
     if (shapename, SH.uniqueLang, Literal(True)) in graph:
-        conj_out.append(SANode(Op.UNIQUELANG, [path]))
+        conj_out.append(SANode(Op.UNIQUELANG, [path], SH.UniqueLangConstraintComponent))
 
     return conj_out
 
