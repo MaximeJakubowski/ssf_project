@@ -4,7 +4,9 @@ Note: this repository serves as an up-to-date version of the project found in th
 The main goal of this project is to translate SHACL shapes to corresponding SPARQL queries according to the shape fragments specification in [our paper](https://openproceedings.org/2023/conf/edbt/paper-3.pdf).
 
 ## Current status
-At the moment, this project is broken. It does not run, and is being worked on. An older, working version can be found [here](https://github.com/Shape-Fragments/SHACL2SPARQL).
+At the moment, the translation from SHACL shapes to unary SPARQL queries is working. You can use it as a library; the test files can be considered an example usage. See `tests/unaryquery_test.py`, the pytest function `test_unary_query_structural`.
+
+The translation from SHACL shapes to [neighborhood](https://openproceedings.org/2023/conf/edbt/paper-3.pdf) SPARQL queries is broken at the moment. An older, working version can be found [here](https://github.com/Shape-Fragments/SHACL2SPARQL).
 
 ## Requirements
 - python 3.9.7
