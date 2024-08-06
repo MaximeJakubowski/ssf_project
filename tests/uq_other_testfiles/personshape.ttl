@@ -1,0 +1,60 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix schema: <http://schema.org/> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dbo: <http://dbpedia.org/ontology/> .
+@prefix : <http://example.org/> .
+
+
+:testshape a sh:NodeShape ;
+ sh:targetClass dbo:Person ; 
+ sh:property [ 
+   sh:path rdfs:label;
+   sh:minCount 1 ;
+   sh:datatype xsd:string;
+ ];
+sh:or (
+    [
+      sh:property [ 
+         sh:path dbo:birthDate;
+         sh:datatype xsd:date;
+         sh:minCount 1;
+         sh:maxCount 1;
+      ]
+    ]   
+    [
+      sh:property [ 
+          sh:path dbo:birthYear;
+          sh:datatype xsd:gYear;
+          sh:minCount 1;
+          sh:maxCount 1;
+      ]
+    ]
+);
+sh:property [ 
+   sh:path dbo:deathYear;
+   sh:minCount 0;
+   sh:maxCount 1;
+   sh:datatype xsd:gYear;
+ ];
+ sh:property [ 
+   sh:path dbo:alias;
+   sh:datatype xsd:string ;
+   sh:minCount 0;
+   sh:maxCount 10;
+   sh:nodeKind sh:Literal;
+ ];
+ sh:property [ 
+   sh:path dbo:birthName ;
+   sh:datatype xsd:string ;
+   sh:minCount 0;
+   sh:maxCount 1;
+   sh:nodeKind sh:Literal ;
+ ] ;
+ sh:property [ 
+   sh:path dbo:deathDate ;
+   sh:datatype xsd:date ;
+   sh:minCount 0;
+   sh:maxCount 1;
+ ].
