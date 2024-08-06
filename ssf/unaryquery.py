@@ -115,7 +115,7 @@ def to_uq(node: SANode) -> str:
         if node.children[1].op == Op.TEST:
             return _build_forall_test_query(to_path(node.children[0]), 
                                             _build_filter_condition(node.children[1].children, var = '?o'))
-        return _build_forall_query(to_path(node.children[0]), to_uq(node.children[0]))
+        return _build_forall_query(to_path(node.children[0]), to_uq(node.children[1]))
 
     if node.op == Op.COUNTRANGE:
         mincount = int(node.children[0])

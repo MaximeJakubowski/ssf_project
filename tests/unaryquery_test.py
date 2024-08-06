@@ -68,3 +68,6 @@ def test_simple_query():
         resultset.add(row[0])
 
     assert resultset == set()
+
+def test_personshape():
+    _unary_query_helper('uq_other_testfiles', 'personshape.ttl', [])
